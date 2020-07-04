@@ -1,0 +1,33 @@
+version: "3.4"
+
+services:
+  # UI dashboard
+  grafana:
+    image: grafana/grafana
+    container_name: automation-grafana
+    environment:
+      - GF_INSTALL_PLUGINS=
+      - GF_PANELS_DISABLE_SANITIZE_HTML=true
+    ports:
+      - 3000:3000
+    restart: always
+  # Database
+  graphite:
+    image: graphiteapp/graphite-statsd
+    container_name: automation-db
+    ports:
+      - 2003
+    restart: always
+  smart_plug_conn:
+    build: ./HS110-interface
+    container_name: automation-HS110
+    restart: always
+  #restreamer:
+  #  container_name: automation-restreamer
+  #  image: datarhei/restreamer:latest
+  #  environment:
+  #    - RS_LOGLEVEL=4
+  #  ports:
+  #    - 3001:8080
+  #   volumes:
+  #     - /mnt/restreamer/db:/restreamer/db
