@@ -6,11 +6,13 @@ services:
     image: grafana/grafana
     container_name: automation-grafana
     environment:
-      - GF_INSTALL_PLUGINS=
+      - GF_INSTALL_PLUGINS=andig-darksky-datasource
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
     ports:
       - 3000:3000
     restart: always
+    volumes:
+      - grafana_data:/var/lib/grafana
   # Database
   graphite:
     image: graphiteapp/graphite-statsd
@@ -22,6 +24,10 @@ services:
     build: ./HS110-interface
     container_name: automation-HS110
     restart: always
+  #pc_conn:
+  #  build: ./PC-interface
+  #  container_name: automation-stats
+  #  restart: always
   #restreamer:
   #  container_name: automation-restreamer
   #  image: datarhei/restreamer:latest
@@ -31,3 +37,5 @@ services:
   #    - 3001:8080
   #   volumes:
   #     - /mnt/restreamer/db:/restreamer/db
+volumes:
+  grafana_data:

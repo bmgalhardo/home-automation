@@ -6,8 +6,26 @@ import threading
 from struct import pack
 
 
-CARBON_SERVER = "graphite"  # docker container
-CARBON_PORT = 2003
+class CarbonDB:
+
+    CARBON_SERVER = "graphite"  # docker container
+    CARBON_PORT = 2003
+
+    @classmethod
+    def store_data(cls, collection_name: str, data: dict) -> None:
+
+        timestamp = int(time.time())
+
+        tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            tcp_sock.connect((cls.CARBON_SERVER, cls.CARBON_PORT))
+            for d in data.keys():
+                message = f'{collection_name}.{d} {data[d]} {timestamp}\n'
+                tcp_sock.send(message.encode())
+        except socket.error:
+            print("Unable to open socket on graphite-carbon.", file=sys.stderr)
+        finally:
+            tcp_sock.close()
 
 
 class SmartPlug:
@@ -96,24 +114,10 @@ class SmartPlug:
 
         if save:
             # stores data in db
-            self.store_data(emeter_data)
+            CarbonDB.store_data(collection_name=self.name,
+                                data=emeter_data)
 
         return emeter_data
-
-    def store_data(self, data: dict) -> None:
-
-        timestamp = int(time.time())
-
-        tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            tcp_sock.connect((CARBON_SERVER, CARBON_PORT))
-            for d in data.keys():
-                message = f'{self.name}.{d} {data[d]} {timestamp}\n'
-                tcp_sock.send(message.encode())
-        except socket.error:
-            print("Unable to open socket on graphite-carbon.", file=sys.stderr)
-        finally:
-            tcp_sock.close()
 
 
 def run():
