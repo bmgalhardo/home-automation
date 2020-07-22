@@ -1,129 +1,81 @@
-import sys
+import asyncio
+from typing import List
+import redis
+from prometheus_client import start_http_server, Gauge
 import time
-import socket
-import json
-import threading
-from struct import pack
+
+from kasa import SmartPlug
 
 
-class CarbonDB:
+class MyPlug(SmartPlug):
 
-    CARBON_SERVER = "graphite"  # docker container
-    CARBON_PORT = 2003
-
-    @classmethod
-    def store_data(cls, collection_name: str, data: dict) -> None:
-
-        timestamp = int(time.time())
-
-        tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            tcp_sock.connect((cls.CARBON_SERVER, cls.CARBON_PORT))
-            for d in data.keys():
-                message = f'{collection_name}.{d} {data[d]} {timestamp}\n'
-                tcp_sock.send(message.encode())
-        except socket.error:
-            print("Unable to open socket on graphite-carbon.", file=sys.stderr)
-        finally:
-            tcp_sock.close()
-
-
-class SmartPlug:
-
-    COMMANDS = {
-        # list of commands
-        # https://github.com/softScheck/tplink-smartplug/blob/master/tplink-smarthome-commands.txt
-        "info": '{"system": {"get_sysinfo": null}}',
-        "current_data": '{"emeter":{"get_realtime":{}}}'
-    }
-
-    PORT = 9999
-
-    def __init__(self, name, ip):
+    def __init__(self, name: str, host: str):
+        super().__init__(host)
         self.name = name
-        self.ip = ip
-
-    # https://github.com/softScheck/tplink-smartplug/blob/master/tplink-smartplug.py
-    @classmethod
-    def encrypt(cls, string: str) -> bytes:
-        key = 171
-        result = pack('>I', len(string))
-        for i in string:
-            a = key ^ ord(i)
-            key = a
-            result += bytes([a])
-
-        return result
-
-    @classmethod
-    def decrypt(cls, data: bytes) -> str:
-        key = 171
-        result = ""
-        for i in data:
-            a = key ^ i
-            key = i
-            result += chr(a)
-        return result
-
-    def send_command(self, cmd: str) -> dict:
-
-        data = b''
-
-        tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            tcp_sock.connect((self.ip, self.PORT))
-            tcp_sock.send(self.encrypt(self.COMMANDS[cmd]))
-            data = tcp_sock.recv(2048)
-        except socket.error:
-            print("Socket closed.", file=sys.stderr)
-        finally:
-            tcp_sock.close()
-
-        if not data:
-            print("No data returned on power request.", file=sys.stderr)
-            # store_metrics(0, 0, 0)
-            return {}
-
-        decrypted_data = self.decrypt(data[4:])
-        json_data = json.loads(decrypted_data)
-
-        return json_data
-
-    def get_version(self) -> dict:
-        data = self.send_command('info')['system']['get_sysinfo']
-        data = {key: data[key] for key in ['alias', 'hw_ver', 'mac', 'model', 'sw_ver']}
-        return data
-
-    def get_measurement(self, save: bool = False) -> dict:
-        data = self.send_command('current_data')
-        emeter = data["emeter"]["get_realtime"]
-
-        if not emeter:
-            print("No emeter data returned on power request.", file=sys.stderr)
-            emeter_data = {
-                'current': 0,
-                'voltage': 0,
-                'power': 0
-            }
-        else:
-            emeter_data = {
-                'current': emeter['current_ma'],
-                'voltage': emeter['voltage_mv'],
-                'power': emeter['power_mw'],
-            }
-
-        if save:
-            # stores data in db
-            CarbonDB.store_data(collection_name=self.name,
-                                data=emeter_data)
-
-        return emeter_data
 
 
-def run():
-    threading.Timer(15.0, run).start()
+class PlugCollection:
 
-    SmartPlug(name='HS110', ip='192.168.8.107').get_measurement(save=True)
+    def __init__(self):
+        self.devices: List[MyPlug] = []
 
-run()
+    def set_devices(self, ips: dict):
+        self.devices = [MyPlug(host=ip, name=name) for name, ip in ips.items()]
 
+    @staticmethod
+    def update(device: MyPlug):
+        asyncio.run(device.update())
+
+    def update_all(self):
+        for _d in self.devices:
+            self.update(_d)
+
+
+UPDATE_PERIOD = 5
+PLUG_VOLTS = Gauge('plug_measurements_volts',
+                   'Hold voltage measurements of smart plugs, in Volt',
+                   ['plug_name'])
+
+PLUG_CURRENT = Gauge('plug_measurements_amps',
+                     'Hold current measurements of smart plugs, in Ampere',
+                     ['plug_name'])
+
+PLUG_LOAD = Gauge('plug_measurements_watts',
+                  'Hold power measurements of smart plugs, in Watts',
+                  ['plug_name'])
+
+MONITORING_DEVICES = ["plug-office", "plug-tv-room"]
+
+if __name__ == '__main__':
+
+    r = redis.Redis(host="redis")
+    # r = redis.Redis(port=6380)
+
+    start_http_server(9999)
+
+    plugs = PlugCollection()
+
+    while True:  # setup loop
+        plug_ip_dict = {i: r.get(i) for i in MONITORING_DEVICES}
+        print(plug_ip_dict)
+        if not any(plug_ip_dict.values()):
+            time.sleep(30)
+            continue
+
+        plugs.set_devices(plug_ip_dict)
+
+        while True:  # measurement loop
+
+            plugs.update_all()
+            # TODO add break if no device found
+            for d in plugs.devices:
+                m = d.emeter_realtime
+                volts = m['voltage_mv']/1000  # mV -> V
+                amps = m['current_ma']/1000  # mA -> A
+                watts = m['power_mw']/1000  # mW -> W
+
+                PLUG_VOLTS.labels(d.name).set(volts)
+                PLUG_CURRENT.labels(d.name).set(amps)
+                PLUG_LOAD.labels(d.name).set(watts)
+
+            time.sleep(UPDATE_PERIOD)

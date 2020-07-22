@@ -1,33 +1,96 @@
-version: "3.4"
+version: "3.5"
 
 services:
-  # UI dashboard
   grafana:
+    # Dashboard UI
     image: grafana/grafana
-    container_name: automation-grafana
+    container_name: hal-grafana
     environment:
       - GF_INSTALL_PLUGINS=andig-darksky-datasource
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
+      - GF_PATHS_CONFIG=/var/lib/grafana/custom.ini
     ports:
       - 3000:3000
     restart: always
     volumes:
-      - grafana_data:/var/lib/grafana
-  # Database
-  graphite:
-    image: graphiteapp/graphite-statsd
-    container_name: automation-db
+      - /media/bgalhardo/Bahamut/home-automation/grafana-config:/var/lib/grafana
+    networks:
+      - hal-network
+
+  prometheus:
+    # Database
+    image: prom/prometheus:latest
+    container_name: hal-prometheus
     ports:
-      - 2003
-    restart: always
+      - 9090
+    command:
+      - --config.file=/prometheus/prometheus.yml
+      - --storage.tsdb.retention.size=700GB
+    volumes:
+      - /media/bgalhardo/Bahamut/home-automation/prometheus-db:/prometheus
+    networks:
+      - hal-network
+
   smart_plug_conn:
+    # broadcast smart plug measurements
     build: ./HS110-interface
-    container_name: automation-HS110
+    container_name: hal-HS110
+    ports:
+      - 9999
     restart: always
-  #pc_conn:
-  #  build: ./PC-interface
-  #  container_name: automation-stats
+    networks:
+      - hal-network
+
+  device_discovery:
+    # discovering plugs for now
+    # TODO add here the delay between broadcasts
+    build: ./device_discovery
+    container_name: hal-discovery
+    network_mode: host
+    restart: always
+
+  cadvisor:
+    # container monitoring
+    image: gcr.io/google-containers/cadvisor:latest
+    container_name: hal-cadvisor
+    ports:
+      - 8080
+    command:
+      - '--housekeeping_interval=10s'
+      - '--disable_metrics=diskIO,tcp,udp,percpu,sched,process'
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - hal-network
+
+  redis:
+    # cache values
+    image: redis:rc-alpine
+    container_name: hal-redis
+    ports:
+      - 6380:6379
+    restart: 'always'
+    networks:
+      - hal-network
+
+  ipcam-control:
+    # TODO add cam password as env
+    # sends commands to ipcam
+    build: ipcam-control
+    container_name: hal-ipcam-control
+    restart: always
+    networks:
+      - hal-network
+  #   records ipcam feed
+  #ipcam-record:
+  #  build: ./ipcam-record
+  #  container_name: automation-ipcam-record
   #  restart: always
+  #  volumes:
+  #    - /media/bgalhardo/Bahamut/home-automation/ipcam-videos:/videos/
   #restreamer:
   #  container_name: automation-restreamer
   #  image: datarhei/restreamer:latest
@@ -37,5 +100,7 @@ services:
   #    - 3001:8080
   #   volumes:
   #     - /mnt/restreamer/db:/restreamer/db
-volumes:
-  grafana_data:
+networks:
+  hal-network:
+    name: hal-network
+    driver: bridge
