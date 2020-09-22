@@ -9,7 +9,7 @@ def get_plug_name(plug_alias: str) -> str:
 
     device_mapping = {
         "SP-01": "plug-tv-room",
-        "SP-02": "plug-office",
+        "SP-02": "plug-projector",
         "SP-03": None
     }
     if plug_alias not in device_mapping.keys():
@@ -45,5 +45,6 @@ if __name__ == '__main__':
     while True:
         devices = discover("192.168.8.255")
         if devices:
+            print(devices)
             r.mset(devices)
         time.sleep(60)

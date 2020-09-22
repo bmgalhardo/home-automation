@@ -44,7 +44,10 @@ PLUG_LOAD = Gauge('plug_measurements_watts',
                   'Hold power measurements of smart plugs, in Watts',
                   ['plug_name'])
 
-MONITORING_DEVICES = ["plug-office", "plug-tv-room"]
+MONITORING_DEVICES = [
+    # "plug-office",
+    "plug-tv-room",
+    "plug-projector"]
 
 if __name__ == '__main__':
 
@@ -56,6 +59,7 @@ if __name__ == '__main__':
     plugs = PlugCollection()
 
     while True:  # setup loop
+        # TODO rewrite to find new plugs if new connections are made
         plug_ip_dict = {i: r.get(i) for i in MONITORING_DEVICES}
         print(plug_ip_dict)
         if not any(plug_ip_dict.values()):
