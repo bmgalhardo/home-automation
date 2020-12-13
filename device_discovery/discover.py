@@ -4,20 +4,6 @@ import redis
 from kasa import Discover, SmartPlug
 
 
-def get_plug_name(plug_alias: str) -> str:
-    """set device name according to whats monitoring"""
-
-    device_mapping = {
-        "SP-01": "plug-tv-room",
-        "SP-02": "plug-projector",
-        "SP-03": None
-    }
-    if plug_alias not in device_mapping.keys():
-        raise KeyError
-
-    return device_mapping[plug_alias]
-
-
 def discover(broadcast_ip: str) -> dict:
     """discovers kasa devices in network"""
 
@@ -31,7 +17,7 @@ def discover(broadcast_ip: str) -> dict:
 
     if devices:
         relevant_raw = {
-            get_plug_name(devices[ip]['system']["get_sysinfo"]['alias']): ip
+            devices[ip]['system']["get_sysinfo"]['alias']: ip
             for ip in devices
         }
         return relevant_raw
@@ -41,10 +27,23 @@ def discover(broadcast_ip: str) -> dict:
 
 if __name__ == '__main__':
 
+    # discovery in host mode to broadcast ping
     r = redis.Redis(port=6380)
     while True:
         devices = discover("192.168.8.255")
         if devices:
-            print(devices)
-            r.mset(devices)
+            current_plugs = r.hkeys('plugs')
+
+            # add detected ones
+            for d_key, d_value in devices.items():
+                r.hset('plugs', d_key, d_value)
+
+            # remove installations not detected
+            dropped = set(a.decode() for a in current_plugs) - set(devices.keys())
+
+            for d in dropped:
+                r.hdel('plugs', d)
+
+        else:
+            r.delete('plugs')
         time.sleep(60)

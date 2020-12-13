@@ -44,15 +44,10 @@ PLUG_LOAD = Gauge('plug_measurements_watts',
                   'Hold power measurements of smart plugs, in Watts',
                   ['plug_name'])
 
-MONITORING_DEVICES = [
-    # "plug-office",
-    "plug-tv-room",
-    "plug-projector"]
-
 if __name__ == '__main__':
 
+    # connect in local mode within docker network
     r = redis.Redis(host="redis")
-    # r = redis.Redis(port=6380)
 
     start_http_server(9999)
 
@@ -60,7 +55,8 @@ if __name__ == '__main__':
 
     while True:  # setup loop
         # TODO rewrite to find new plugs if new connections are made
-        plug_ip_dict = {i: r.get(i) for i in MONITORING_DEVICES}
+        redis_dict = r.hgetall('plugs')
+        plug_ip_dict = {k.decode(): v.decode() for k, v in redis_dict.items()}
         print(plug_ip_dict)
         if not any(plug_ip_dict.values()):
             time.sleep(30)
