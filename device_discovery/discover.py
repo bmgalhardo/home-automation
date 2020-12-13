@@ -2,8 +2,9 @@ import asyncio
 import time
 import redis
 from kasa import Discover, SmartPlug
+import os
 
-DISCOVERY_PERIOD = 60
+DISCOVERY_PERIOD = int(os.getenv('DISCOVERY_PERIOD', 60))
 
 
 def discover(broadcast_ip: str) -> dict:
@@ -48,4 +49,5 @@ if __name__ == '__main__':
 
         else:
             r.delete('plugs')
+
         time.sleep(DISCOVERY_PERIOD)

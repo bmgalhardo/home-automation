@@ -2,13 +2,15 @@ import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import List
 import redis
+import os
 from prometheus_client import start_http_server, Gauge
 
 from kasa import SmartPlug
 
 
-UPDATE_PERIOD = 5
-DISCOVERY_PERIOD = 60
+UPDATE_PERIOD = int(os.getenv('UPDATE_PERIOD', 5))
+DISCOVERY_PERIOD = int(os.getenv('DISCOVERY_PERIOD', 60))
+
 PLUG_VOLTS = Gauge('plug_measurements_volts',
                    'Hold voltage measurements of smart plugs, in Volt',
                    ['plug_name'])

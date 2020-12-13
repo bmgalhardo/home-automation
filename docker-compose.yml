@@ -37,6 +37,9 @@ services:
     # broadcast smart plug measurements
     build: ./HS110-interface
     container_name: hal-HS110
+    environment:
+      - DISCOVERY_PERIOD=60
+      - UPDATE_PERIOD=5
     ports:
       - 9999
     restart: always
@@ -48,6 +51,8 @@ services:
     # TODO add here the delay between broadcasts
     build: ./device_discovery
     container_name: hal-discovery
+    environment:
+      - DISCOVERY_PERIOD=30
     network_mode: host
     restart: always
 
