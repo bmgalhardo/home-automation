@@ -3,6 +3,8 @@ import time
 import redis
 from kasa import Discover, SmartPlug
 
+DISCOVERY_PERIOD = 60
+
 
 def discover(broadcast_ip: str) -> dict:
     """discovers kasa devices in network"""
@@ -46,4 +48,4 @@ if __name__ == '__main__':
 
         else:
             r.delete('plugs')
-        time.sleep(60)
+        time.sleep(DISCOVERY_PERIOD)
