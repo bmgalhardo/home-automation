@@ -1,9 +1,15 @@
 version: "3.5"
 
-services:
+x-logging: &logging
+  logging:
+    driver: loki
+    options:
+      loki-url: "http://127.0.0.1:3100/loki/api/v1/push"
 
+services:
   grafana:
     # Dashboard UI
+    <<: *logging
     image: grafana/grafana
     container_name: hal-grafana
     environment:
@@ -12,29 +18,31 @@ services:
       - GF_PATHS_CONFIG=/var/lib/grafana/custom.ini
     ports:
       - 3000:3000
-    restart: always
     volumes:
       - /media/bgalhardo/Bahamut/home-automation/grafana-config:/var/lib/grafana
+    restart: always
     networks:
       - hal-network
 
   prometheus:
     # Database
+    <<: *logging
     image: prom/prometheus:latest
     container_name: hal-prometheus
-    ports:
-      - 9090
     command:
       - --config.file=/prometheus/prometheus.yml
       - --storage.tsdb.retention.size=700GB
-    restart: always
+    ports:
+      - 9090
     volumes:
       - /media/bgalhardo/Bahamut/home-automation/prometheus-db:/prometheus
+    restart: always
     networks:
       - hal-network
 
   smart_plug_conn:
     # broadcast smart plug measurements
+    <<: *logging
     build: ./HS110-interface
     container_name: hal-HS110
     environment:
@@ -49,22 +57,24 @@ services:
   device_discovery:
     # discovering plugs for now
     # TODO add here the delay between broadcasts
+    <<: *logging
     build: ./device_discovery
     container_name: hal-discovery
     environment:
       - DISCOVERY_PERIOD=30
-    network_mode: host
     restart: always
+    network_mode: host
 
   cadvisor:
     # container monitoring
+    <<: *logging
     image: gcr.io/google-containers/cadvisor:latest
     container_name: hal-cadvisor
-    ports:
-      - 8080
     command:
       - '--housekeeping_interval=10s'
       - '--disable_metrics=diskIO,tcp,udp,percpu,sched,process'
+    ports:
+      - 8080
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw
@@ -75,6 +85,7 @@ services:
 
   redis:
     # cache values
+    <<: *logging
     image: redis:rc-alpine
     container_name: hal-redis
     ports:
@@ -82,6 +93,29 @@ services:
     restart: 'always'
     networks:
       - hal-network
+
+  loki:
+    <<: *logging
+    image: grafana/loki:master
+    container_name: hal-loki
+    ports:
+      - 3100:3100
+    command: -config.file=/etc/loki/local-config.yaml
+#    volumes:
+#      - ./loki/config.yml:/etc/loki/config.yaml
+#      - /data/volumes/loki:/data/loki
+    networks:
+      - hal-network
+
+#  promtail:
+#    image: grafana/promtail:master
+#    container_name: hal-promtail
+#    volumes:
+#      - /var/log:/var/log
+#      - /media/bgalhardo/Bahamut/home-automation/promtail-db:/promtail
+#    command: -config.file=/promtail/config.yaml
+#    networks:
+#      - hal-network
 
   #ipcam-control:
   #  # TODO add cam password as env
@@ -103,4 +137,3 @@ services:
 networks:
   hal-network:
     name: hal-network
-    driver: bridge
