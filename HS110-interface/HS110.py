@@ -11,17 +11,19 @@ from kasa import SmartPlug
 UPDATE_PERIOD = int(os.getenv('UPDATE_PERIOD', 5))
 DISCOVERY_PERIOD = int(os.getenv('DISCOVERY_PERIOD', 60))
 
-PLUG_VOLTS = Gauge('plug_measurements_volts',
-                   'Hold voltage measurements of smart plugs, in Volt',
-                   ['plug_name'])
+PLUG_VOLTS = Gauge(name='plug_measurements_volts',
+                   documentation='Hold voltage measurements of smart plugs, Volts',
+                   labelnames=['plug_name'])
 
-PLUG_CURRENT = Gauge('plug_measurements_amps',
-                     'Hold current measurements of smart plugs, in Ampere',
-                     ['plug_name'])
+PLUG_CURRENT = Gauge(name='plug_measurements_amps',
+                     documentation='Hold current measurements of smart plugs, Ampere',
+                     labelnames=['plug_name'],
+                     )
 
-PLUG_LOAD = Gauge('plug_measurements_watts',
-                  'Hold power measurements of smart plugs, in Watts',
-                  ['plug_name'])
+PLUG_LOAD = Gauge(name='plug_measurements_watts',
+                  documentation='Hold power measurements of smart plugs, Watt',
+                  labelnames=['plug_name'],
+                  )
 
 
 class MyPlug(SmartPlug):
