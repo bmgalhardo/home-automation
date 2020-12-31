@@ -5,22 +5,27 @@ import os
 from prometheus_client import start_http_server, Gauge
 
 from kasa import SmartPlug, Discover
+import logging
 
+logging.basicConfig(level=logging.DEBUG)
 
 UPDATE_PERIOD = int(os.getenv('UPDATE_PERIOD', 5))
 DISCOVERY_PERIOD = int(os.getenv('DISCOVERY_PERIOD', 60))
 
-PLUG_VOLTS = Gauge(name='plug_measurements_volts',
-                   documentation='Hold voltage measurements of smart plugs, Volts',
+PLUG_VOLTS = Gauge(name='plug_measurements',
+                   documentation='Hold voltage measurements of smart plugs',
+                   unit="volts",
                    labelnames=['plug_name'])
 
-PLUG_CURRENT = Gauge(name='plug_measurements_amps',
-                     documentation='Hold current measurements of smart plugs, Ampere',
+PLUG_CURRENT = Gauge(name='plug_measurements',
+                     documentation='Hold current measurements of smart plugs',
+                     unit="amperes",
                      labelnames=['plug_name'],
                      )
 
-PLUG_LOAD = Gauge(name='plug_measurements_watts',
-                  documentation='Hold power measurements of smart plugs, Watt',
+PLUG_LOAD = Gauge(name='plug_measurements',
+                  documentation='Hold power measurements of smart plugs',
+                  unit="watts",
                   labelnames=['plug_name'],
                   )
 
@@ -58,6 +63,7 @@ class PlugCollection:
                 devices[ip]['system']["get_sysinfo"]['alias']: ip
                 for ip in devices
             }
+            logging.info(relevant_raw)
             self.set_devices(relevant_raw)
 
     async def set_measurements(self) -> None:
