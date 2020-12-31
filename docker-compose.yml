@@ -49,8 +49,6 @@ services:
     environment:
       - DISCOVERY_PERIOD=60
       - UPDATE_PERIOD=5
-    ports:
-      - 9999
     restart: always
     network_mode: host
 

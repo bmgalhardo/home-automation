@@ -46,7 +46,7 @@ class PlugCollection:
         """assigns devices to class"""
         self.devices = [MyPlug(host=ip, name=name) for name, ip in ips.items()]
 
-    def discover_devices(self, broadcast_ip: str) -> None:
+    def discover_devices(self, broadcast_ip: str = "192.168.8.255") -> None:
         """discovers kasa devices in network"""
 
         loop = asyncio.get_event_loop()
