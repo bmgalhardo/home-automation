@@ -1,11 +1,10 @@
 import asyncio
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from typing import List
-import redis
 import os
 from prometheus_client import start_http_server, Gauge
 
-from kasa import SmartPlug
+from kasa import SmartPlug, Discover
 
 
 UPDATE_PERIOD = int(os.getenv('UPDATE_PERIOD', 5))
@@ -35,23 +34,33 @@ class MyPlug(SmartPlug):
 
 class PlugCollection:
 
-    # connect in local mode within docker network
-    cache = redis.Redis(host='redis')
-
-    def __init__(self):
+    def __init__(self) -> None:
         self.devices: List[MyPlug] = []
 
-    def set_devices(self, ips: dict):
+    def set_devices(self, ips: dict) -> None:
         """assigns devices to class"""
         self.devices = [MyPlug(host=ip, name=name) for name, ip in ips.items()]
 
-    def discover_devices(self):
-        """retrieves devices from cache"""
-        redis_dict = self.cache.hgetall('plugs')
-        plug_ip_dict = {k.decode(): v.decode() for k, v in redis_dict.items()}
-        self.set_devices(plug_ip_dict)
+    def discover_devices(self, broadcast_ip: str) -> None:
+        """discovers kasa devices in network"""
 
-    async def set_measurements(self):
+        loop = asyncio.get_event_loop()
+
+        async def _on_device(_dev: SmartPlug):
+            await _dev.update()
+
+        # TODO clean shutdown behaviour
+        devices = loop.run_until_complete(
+            Discover.discover(on_discovered=_on_device, return_raw=True, target=broadcast_ip))
+
+        if devices:
+            relevant_raw = {
+                devices[ip]['system']["get_sysinfo"]['alias']: ip
+                for ip in devices
+            }
+            self.set_devices(relevant_raw)
+
+    async def set_measurements(self) -> None:
         """update retrieves new measurements from the device which are then made available at endpoint"""
         for d in self.devices:
             await d.update()
