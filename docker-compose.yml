@@ -52,6 +52,15 @@ services:
     restart: always
     network_mode: host
 
+  speedtest:
+    <<: *logging
+    image: jraviles/prometheus_speedtest:latest
+    container_name: hal-speedtest
+    ports:
+      - 9516:9516
+    networks:
+      - hal-network
+
   cadvisor:
     # container monitoring
     <<: *logging
@@ -67,6 +76,15 @@ services:
       - /var/run:/var/run:rw
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
+    networks:
+      - hal-network
+
+  consul:
+    <<: *logging
+    image: consul:latest
+    container_name: hal-consul
+    ports:
+      - 8500:8500
     networks:
       - hal-network
 

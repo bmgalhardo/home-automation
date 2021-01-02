@@ -7,10 +7,10 @@ from prometheus_client import start_http_server, Gauge
 from kasa import SmartPlug, Discover
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 UPDATE_PERIOD = int(os.getenv('UPDATE_PERIOD', 5))
-DISCOVERY_PERIOD = int(os.getenv('DISCOVERY_PERIOD', 60))
+DISCOVERY_PERIOD = int(os.getenv('DISCOVERY_PERIOD', 10))
 
 PLUG_VOLTS = Gauge(name='plug_measurements',
                    documentation='Hold voltage measurements of smart plugs',
@@ -46,24 +46,16 @@ class PlugCollection:
         """assigns devices to class"""
         self.devices = [MyPlug(host=ip, name=name) for name, ip in ips.items()]
 
-    def discover_devices(self, broadcast_ip: str = "192.168.8.255") -> None:
+    async def discover_devices(self, broadcast_ip: str = "192.168.8.255") -> None:
         """discovers kasa devices in network"""
 
-        loop = asyncio.get_event_loop()
-
-        async def _on_device(_dev: SmartPlug):
-            await _dev.update()
-
-        # TODO clean shutdown behaviour
-        devices = loop.run_until_complete(
-            Discover.discover(on_discovered=_on_device, return_raw=True, target=broadcast_ip))
-
+        devices = await Discover.discover(return_raw=True, target=broadcast_ip)
         if devices:
             relevant_raw = {
                 devices[ip]['system']["get_sysinfo"]['alias']: ip
                 for ip in devices
             }
-            logging.info(relevant_raw)
+            logging.info(f"Devices Found: {relevant_raw}")
             self.set_devices(relevant_raw)
 
     async def set_measurements(self) -> None:
