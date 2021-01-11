@@ -1,8 +1,8 @@
 FROM python:3.8-alpine
 
-ADD HS110.py /
+ADD main.py /
 ADD requirements.txt /
 
 RUN pip install -r requirements.txt
 
-CMD ["python", "-u", "./HS110.py"]
+CMD ["python", "-u", "./main.py"]

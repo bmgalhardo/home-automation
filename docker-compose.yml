@@ -13,7 +13,7 @@ services:
     image: grafana/grafana
     container_name: hal-grafana
     environment:
-      - GF_INSTALL_PLUGINS=andig-darksky-datasource,agenty-flowcharting-panel
+      - GF_INSTALL_PLUGINS=andig-darksky-datasource,agenty-flowcharting-panel,grafana-clock-panel,natel-discrete-panel
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
       - GF_PATHS_CONFIG=/var/lib/grafana/custom.ini
     ports:
@@ -41,18 +41,25 @@ services:
     networks:
       - hal-network
 
-  smart_plug_conn:
+  smart_devices:
     # broadcast smart plug measurements
     <<: *logging
-    build: ./HS110-interface
-    container_name: hal-HS110
+    build: ./smart-devices
+    container_name: hal-smart-devices
     environment:
       - DISCOVERY_PERIOD=60
       - UPDATE_PERIOD=5
+      - BROADCAST_IP=192.168.8.255
+      - SERVER_PORT=9999
     restart: always
     network_mode: host
+#    ports:
+#      - 9999
+#    networks:
+#      - hal-network
 
   speedtest:
+    # endpoint for internet speed tests
     <<: *logging
     image: jraviles/prometheus_speedtest:latest
     container_name: hal-speedtest
@@ -80,15 +87,28 @@ services:
       - hal-network
 
   consul:
+    # log sensor ips
     <<: *logging
     image: consul:latest
+    command: "agent -server -bootstrap-expect 1 -ui -client 0.0.0.0 -node=HAL9000"
     container_name: hal-consul
     ports:
       - 8500:8500
     networks:
       - hal-network
 
+  consul-esm:
+    # allows health check to consul external services
+    <<: *logging
+    build: consul-esm
+    container_name: hal-consul-esm
+    environment:
+      - CONSUL_HTTP_ADDR=consul:8500
+    networks:
+      - hal-network
+
   loki:
+    # logger
     <<: *logging
     image: grafana/loki:master
     container_name: hal-loki
@@ -98,6 +118,20 @@ services:
 #    volumes:
 #      - ./loki/config.yml:/etc/loki/config.yaml
 #      - /data/volumes/loki:/data/loki
+    networks:
+      - hal-network
+
+  restreamer:
+    # to convert rtsp -> html
+    <<: *logging
+    image: datarhei/restreamer:latest
+    container_name: hal-restreamer
+    environment:
+      - RS_INPUTSTREAM=rtsp://admin:notoo7luke@192.168.8.99:10554/tcp/av0_0
+      - RS_USERNAME=admin
+      - RS_PASSWORD=admin
+    ports:
+      - 8080:8080
     networks:
       - hal-network
 
