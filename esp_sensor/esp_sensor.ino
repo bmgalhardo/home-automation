@@ -14,12 +14,12 @@ const char* ssid = "MEO-B7EA35";
 const char* password = "FYHE0QAG63T";
 
 // Discovery Configurations
-const char* location_name = "Living-Room";
+const char* location_name = "Hall";
 const char* service_name = "DHT11";
 
 // Consul Configuration
 const char* consul_url = "192.168.8.101";
-const char* consul_port = "8500";
+const int consul_port = 8500;
 const char* consul_endpoint = "/v1/catalog/register";
 
 DHT dht(DHTPIN, DHTTYPE);
@@ -53,11 +53,13 @@ String prepareConsulPayload(String ip) {
    payload += F(
     ":80\","
     "\"Interval\": \"60s\","
-    "\"Timeout\": \"5s\","
+    "\"Timeout\": \"5s\""
     "}}}");
   
   payloadHeader = F(
-    "PUT /v1/catalog/register HTTP/1.1\r\n"
+    "PUT ");
+  payloadHeader += consul_endpoint;
+  payloadHeader += F(" HTTP/1.1\r\n"
     "Host:");
   payloadHeader += consul_url;
   payloadHeader += F(":");
@@ -73,7 +75,7 @@ String prepareConsulPayload(String ip) {
     "Connection: close\r\n"
     "\r\n"
   );
-//  Serial.println(payload);
+  Serial.println(payload);
   return payloadHeader + payload;
 }
   

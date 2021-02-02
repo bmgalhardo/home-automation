@@ -34,7 +34,7 @@ class IPCam:
     def execute_message(cls, command: int) -> None:
         # check commands here
         # https://onlinecamera.net/lapok/letoltesek/cgi-instructions-fd.pdf
-
+        #
         message = f"http://{cls.IP}:{cls.PORT}/decoder_control.cgi?" \
                   f"loginuse={cls.USER}&loginpas={cls.PASS}&" \
                   f"command={command}&onestep=0"
