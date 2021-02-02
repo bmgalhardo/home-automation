@@ -46,17 +46,72 @@ BULB_SATURATION = Gauge(name='bulb_measurements_saturation',
                         labelnames=['group', 'location', 'type', 'device']
                         )
 
-BULB_Brightness = Gauge(name='bulb_measurements_brightness',
+BULB_BRIGHTNESS = Gauge(name='bulb_measurements_brightness',
                         documentation='Brightness of light bulb',
                         unit='percent',
                         labelnames=['group', 'location', 'type', 'device']
                         )
 
-BULB_Kelvin = Gauge(name='bulb_measurements',
+BULB_KELVIN = Gauge(name='bulb_measurements',
                     documentation='Colour temperature of light bulb',
                     unit='kelvin',
                     labelnames=['group', 'location', 'type', 'device']
                     )
+
+
+class DeviceCollection:
+
+    DISCOVERY_ENDPOINT: str = None
+    METRICS_ENDPOINT: str = None
+    DEVICE = None
+    METRICS: dict = {}
+
+    devices = []
+
+    def discovery(self) -> None:
+        """assigns devices to class"""
+        response = requests.get(self.DISCOVERY_ENDPOINT)
+        if response.status_code == 200:
+            discovered_devices = [self.DEVICE(**b) for b in response.json()]
+            disconnected = set(self.devices) - set(discovered_devices)
+            if disconnected:
+                for i in disconnected:
+                    self.fill_null(i)
+            self.devices = discovered_devices
+        else:
+            logging.warning("could not retrieve device info")
+
+    def set_measurements(self) -> None:
+        for device in self.devices:
+            self.update_metrics(device)
+
+    @staticmethod
+    def get_label(device):
+        return NotImplemented
+
+    @staticmethod
+    def get_post_data(device):
+        return NotImplemented
+
+    def fill_null(self, device) -> None:
+        label_values = self.get_label(device)
+        for key, item in self.METRICS.items():
+            key.labels(*label_values).set('nan')
+
+    def update_metrics(self, device) -> None:
+        """update the metrics for a given bulb"""
+
+        data = self.get_post_data(device)
+
+        response = requests.post(self.METRICS_ENDPOINT, json=data)
+        label_values = self.get_label(device)
+        metrics = response.json()
+
+        for key, item in self.METRICS.items():
+            if response.status_code == 200:
+                key.labels(*label_values).set(metrics[item])
+            else:
+                key.labels(*label_values).set('nan')
 
 
 class Plug:
@@ -66,41 +121,25 @@ class Plug:
         self.ip = kwargs['ip']
 
 
-class PlugCollection:
+class PlugCollection(DeviceCollection):
 
-    def __init__(self) -> None:
-        self.plugs: List[Plug] = []
-
-    def discovery(self) -> None:
-        """assigns devices to class"""
-        response = requests.get(f"{settings.PLUG_CONTROLLER}/all_plugs")
-        if response.status_code == 200:
-            self.plugs = [Plug(**b) for b in response.json()]
-        else:
-            logging.warning("could not retrieve plug info")
-
-    def set_measurements(self) -> None:
-        for plug in self.plugs:
-            self.update_metrics(plug)
+    device: List[Plug] = []
+    DEVICE = Plug
+    DISCOVERY_ENDPOINT = f"{settings.PLUG_CONTROLLER}/all_plugs"
+    METRICS_ENDPOINT = f"{settings.PLUG_CONTROLLER}/plug_metrics"
+    METRICS = {
+        PLUG_VOLTS: 'volt',
+        PLUG_CURRENT: 'ampere',
+        PLUG_LOAD: 'watts'
+    }
 
     @staticmethod
-    def update_metrics(plug) -> None:
-        """update the metrics for a given bulb"""
+    def get_label(device: Plug) -> list:
+        return [device.name, "smart_plug"]
 
-        data = {'ip': plug.ip}
-
-        response = requests.post(f"{settings.PLUG_CONTROLLER}/plug_metrics", json=data)
-        label_values = [plug.name, "smart_plug"]
-        metrics = response.json()
-
-        if response.status_code == 200:
-            PLUG_VOLTS.labels(*label_values).set(metrics['volt'])
-            PLUG_CURRENT.labels(*label_values).set(metrics['ampere'])
-            PLUG_LOAD.labels(*label_values).set(metrics['watts'])
-        else:
-            PLUG_VOLTS.labels(*label_values).set('nan')
-            PLUG_CURRENT.labels(*label_values).set('nan')
-            PLUG_LOAD.labels(*label_values).set('nan')
+    @staticmethod
+    def get_post_data(device: Plug) -> dict:
+        return {'ip': device.ip}
 
 
 class Bulb:
@@ -112,47 +151,30 @@ class Bulb:
         self.product = kwargs['product']
 
 
-class BulbCollection:
+class BulbCollection(DeviceCollection):
 
-    def __init__(self):
-        self.bulbs: List[Bulb] = []
-
-    def discovery(self):
-        response = requests.get(f"{settings.BULB_CONTROLLER}/all_bulbs")
-        if response.status_code == 200:
-            self.bulbs = [Bulb(**b) for b in response.json()]
-        else:
-            logging.warning("could not retrieve bulb info")
-
-    def set_measurements(self) -> None:
-        for bulb in self.bulbs:
-            self.update_metrics(bulb)
+    device: List[Bulb] = []
+    DEVICE = Bulb
+    DISCOVERY_ENDPOINT = f"{settings.BULB_CONTROLLER}/all_bulbs"
+    METRICS_ENDPOINT = f"{settings.BULB_CONTROLLER}/bulb_metrics"
+    METRICS = {
+        BULB_STATE: 'state',
+        BULB_HUE: 'hue',
+        BULB_SATURATION: 'saturation',
+        BULB_BRIGHTNESS: 'brightness',
+        BULB_KELVIN: 'kelvin'
+    }
 
     @staticmethod
-    def update_metrics(bulb) -> None:
-        """update the metrics for a given bulb"""
+    def get_label(device: Bulb) -> list:
+        return [device.group, device.label, device.product, 'smart_bulb']
 
-        data = {
-            'ip': bulb.ip,
-            'mac': bulb.mac,
+    @staticmethod
+    def get_post_data(device: Bulb) -> dict:
+        return {
+            'ip': device.ip,
+            'mac': device.mac,
         }
-
-        response = requests.post(f"{settings.BULB_CONTROLLER}/bulb_metrics", json=data)
-        label_values = [bulb.group, bulb.label, bulb.product, 'smart_bulb']
-        metrics = response.json()
-
-        if response.status_code == 200:
-            BULB_STATE.labels(*label_values).set(metrics['state'])
-            BULB_HUE.labels(*label_values).set(metrics['hue'])
-            BULB_SATURATION.labels(*label_values).set(metrics['saturation'])
-            BULB_Brightness.labels(*label_values).set(metrics['brightness'])
-            BULB_Kelvin.labels(*label_values).set(metrics['kelvin'])
-        else:
-            BULB_STATE.labels(*label_values).set('nan')
-            BULB_HUE.labels(*label_values).set('nan')
-            BULB_SATURATION.labels(*label_values).set('nan')
-            BULB_Brightness.labels(*label_values).set('nan')
-            BULB_Kelvin.labels(*label_values).set('nan')
 
 
 class EDP:

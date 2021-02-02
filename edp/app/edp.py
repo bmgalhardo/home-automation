@@ -52,14 +52,14 @@ class EDPConnect:
         else:
             cache_token = None
             try:
-                cache_token = cls.r.get('edp_token').decode()
+                cache_token = cls.r.get('edp_token')
             except ConnectionError:
                 logging.error("can't connect to redis, token will not be cached")
 
             if cache_token is None:
                 cls.get_token()
             else:
-                token = cache_token
+                token = cache_token.decode()
                 cls.set_headers(token)
 
         return cls

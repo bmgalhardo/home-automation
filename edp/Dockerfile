@@ -1,9 +1,5 @@
-FROM python:3.8-alpine
+FROM tiangolo/uvicorn-gunicorn-fastapi:python3.7
 
-ADD edp.py /
-ADD app.py /
-ADD requirements.txt /
+COPY ./app /app
 
-RUN pip install -r requirements.txt
-
-CMD ["flask", "run", "-h", "0.0.0.0"]
+RUN pip install requests==2.24.0 redis==3.5.3
