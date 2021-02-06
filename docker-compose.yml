@@ -16,11 +16,23 @@ services:
       - GF_INSTALL_PLUGINS=andig-darksky-datasource,agenty-flowcharting-panel,grafana-clock-panel,natel-discrete-panel
       - GF_PANELS_DISABLE_SANITIZE_HTML=true
       - GF_PATHS_CONFIG=/var/lib/grafana/custom.ini
+      - GF_RENDERING_SERVER_URL=http://renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
     ports:
       - 3000:3000
     volumes:
       - /media/bgalhardo/Bahamut/home-automation/grafana-config:/var/lib/grafana
     restart: always
+    networks:
+      - hal-network
+
+  grafana-renderer:
+    <<: *logging
+    image: grafana/grafana-image-renderer:latest
+    container_name: hal-grafana-renderer
+    restart: always
+    ports:
+      - 8081
     networks:
       - hal-network
 
@@ -41,28 +53,30 @@ services:
     networks:
       - hal-network
 
-  smart_devices:
+  prometheus-metrics:
     # broadcast smart plug measurements
     <<: *logging
-    build: ./smart-devices
-    container_name: hal-smart-devices
+    build: ./prometheus-metrics
+    container_name: hal-prometheus-metrics
     environment:
-      - DISCOVERY_PERIOD=60
+      - DISCOVERY_PERIOD=30
       - UPDATE_PERIOD=5
-      - BROADCAST_IP=192.168.8.255
       - SERVER_PORT=9999
+      - EDP_CONTROLLER=http://edp:5000
+      - BULB_CONTROLLER=http://192.168.8.101:5001
+      - PLUG_CONTROLLER=http://192.168.8.101:5002
     restart: always
-    network_mode: host
-#    ports:
-#      - 9999
-#    networks:
-#      - hal-network
+    ports:
+      - 9999
+    networks:
+      - hal-network
 
   speedtest:
     # endpoint for internet speed tests
     <<: *logging
     image: jraviles/prometheus_speedtest:latest
     container_name: hal-speedtest
+    restart: always
     ports:
       - 9516:9516
     networks:
@@ -78,6 +92,7 @@ services:
       - '--disable_metrics=diskIO,tcp,udp,percpu,sched,process'
     ports:
       - 8080
+    restart: always
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:rw
@@ -92,6 +107,9 @@ services:
     image: consul:latest
     command: "agent -server -bootstrap-expect 1 -ui -client 0.0.0.0 -node=HAL9000"
     container_name: hal-consul
+    restart: always
+    volumes:
+      - /media/bgalhardo/Bahamut/home-automation/consul:/consul/data
     ports:
       - 8500:8500
     networks:
@@ -101,6 +119,7 @@ services:
     # allows health check to consul external services
     <<: *logging
     build: consul-esm
+    restart: always
     container_name: hal-consul-esm
     environment:
       - CONSUL_HTTP_ADDR=consul:8500
@@ -118,6 +137,7 @@ services:
 #    volumes:
 #      - ./loki/config.yml:/etc/loki/config.yaml
 #      - /data/volumes/loki:/data/loki
+    restart: always
     networks:
       - hal-network
 
@@ -130,10 +150,59 @@ services:
       - RS_INPUTSTREAM=rtsp://admin:notoo7luke@192.168.8.99:10554/tcp/av0_0
       - RS_USERNAME=admin
       - RS_PASSWORD=admin
+    restart: always
     ports:
       - 8080:8080
     networks:
       - hal-network
+
+  redis:
+    image: redis:rc-alpine
+    container_name: hal-redis
+    ports:
+      - 6379:6379
+    restart: always
+    networks:
+      - hal-network
+
+  edp:
+    # smart meter api
+    <<: *logging
+    build: ./edp
+    container_name: hal-edp
+    environment:
+      - USERNAME
+      - PASSWORD
+      - ADDRESS=https://online.e-redes.pt/listeners/api.php/ms
+      - PORT=5000
+    restart: always
+    ports:
+      - 5000
+    networks:
+      - hal-network
+
+  lifx:
+    # lifx bulbs api
+    <<: *logging
+    build: ./lifx
+    container_name: hal-lifx
+    environment:
+      - MODULE_NAME=lifx
+      - PORT=5001
+    restart: always
+    network_mode: host
+
+  smartplug:
+    # kasa plugs api
+    <<: *logging
+    build: ./smartplug
+    container_name: hal-smartplug
+    environment:
+      - BROADCAST_IP=192.168.8.255
+      - MODULE_NAME=smartplug
+      - PORT=5002
+    restart: always
+    network_mode: host
 
   #ipcam-control:
   #  # TODO add cam password as env

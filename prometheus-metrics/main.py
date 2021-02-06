@@ -59,11 +59,18 @@ BULB_KELVIN = Gauge(name='bulb_measurements',
                     )
 
 
+class Device:
+
+    def __init__(self, ip):
+        self.ip = ip
+        self.failures = 0
+
+
 class DeviceCollection:
 
     DISCOVERY_ENDPOINT: str = None
     METRICS_ENDPOINT: str = None
-    DEVICE = None
+    DEVICE = Device
     METRICS: dict = {}
 
     devices = []
@@ -73,9 +80,11 @@ class DeviceCollection:
         response = requests.get(self.DISCOVERY_ENDPOINT)
         if response.status_code == 200:
             discovered_devices = [self.DEVICE(**b) for b in response.json()]
-            disconnected = set(self.devices) - set(discovered_devices)
+            disconnected = set(d.ip for d in self.devices) - set(d.ip for d in discovered_devices)
+            logging.info(f' set of current {set(d.ip for d in self.devices)} - set of discovered {set(d.ip for d in discovered_devices)} = disconnected {disconnected}')
             if disconnected:
-                for i in disconnected:
+                logging.info(f'removing disconnected devices: {disconnected}')
+                for i in list(d for d in self.devices if d.ip in disconnected):
                     self.fill_null(i)
             self.devices = discovered_devices
         else:
@@ -114,11 +123,12 @@ class DeviceCollection:
                 key.labels(*label_values).set('nan')
 
 
-class Plug:
+class Plug(Device):
 
-    def __init__(self, **kwargs):
+    def __init__(self, ip, **kwargs):
+        super().__init__(ip)
         self.name = kwargs['alias']
-        self.ip = kwargs['ip']
+        # self.ip = kwargs['ip']
 
 
 class PlugCollection(DeviceCollection):
@@ -142,9 +152,9 @@ class PlugCollection(DeviceCollection):
         return {'ip': device.ip}
 
 
-class Bulb:
-    def __init__(self, **kwargs):
-        self.ip = kwargs['ip']
+class Bulb(Device):
+    def __init__(self, ip, **kwargs):
+        super().__init__(ip)
         self.mac = kwargs['mac_address']
         self.label = kwargs['label']
         self.group = kwargs['group']
